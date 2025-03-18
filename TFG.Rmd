@@ -1,0 +1,662 @@
+---
+title: "Modelo de probabilidad para el análisis de resultados de Liga Española"
+output: github_document
+date: "2023-06-21"
+editor_options:
+  chunk_output_type: console
+---
+
+```{r CHUNK 1}
+library(dplyr)
+library(engsoccerdata)
+library(readxl)
+library(vcd)
+library(tidyverse)
+library(ggplot2)
+```
+
+```{r PREPARAR LOS DATASETS PARA JUNTARLOS}
+predata = spain[,-9]
+rownames_to_column(predata,var = 'index')
+prenueva_data = read_xlsx("ultimas2temporadas.xlsx", sheet = 'Hoja4')
+prenueva_data$Date = as.Date(prenueva_data$Date)
+prenueva_data$HT <- replace(prenueva_data$HT, is.na(prenueva_data$HT), NA)
+prenueva_data$group <- replace(prenueva_data$group, is.na(prenueva_data$group), NA)
+prenueva_data$notes <- replace(prenueva_data$notes, is.na(prenueva_data$notes), NA)
+```
+
+```{r CHUNK 2 JUNTAR LOS DATAFRAMES}
+data1 = predata
+nueva_data = prenueva_data
+data2 = rbind(data1, nueva_data)
+data = data2[,-c(5,9,10,11)]
+```
+
+```{r CHUNK 3}
+tmp = 2022
+datos=data[(data$Season > tmp-9) & (data$Season < 2023),]
+
+```
+
+```{r CHUNK 4 Organizar temp}
+temp=rbind(
+  datos %>% select(Season, Equipo=home, opp=visitor, GF=hgoal, GC=vgoal),
+  datos %>% select(Season, Equipo=visitor, opp=home, GF=vgoal, GC=hgoal)
+    )
+#Duplica las observaciones, una para equipo de cada enfrentamiento.
+
+temp$GF=as.numeric(temp$GF)
+temp$GC=as.numeric(temp$GC)
+temp=temp %>% mutate(dG=GF-GC)
+```
+
+```{r CHUNK 5}
+lambdaT=mean(temp$GF) #Calcula la media de los goles metidos y lo asigna a la
+#lambda de la distribucion de Poisson
+fptemp = rpois(length(temp$GF),lambda=lambdaT) #Calcula 760 valores aleatroios de la
+#distribución de Poisson con la lambda calculada
+par(mfrow = c(1,2))
+
+barplot(table(fptemp),col = "blue",ylab = "Frecuencia", xlab = "Goles durante la
+     temporada",main = "Distribución teórica",ylim=c(0,2700)) #Saca el gráfico de
+#los goles esperados
+grid(nx = NA, ny = NULL,lty = 1, col = "gray", lwd = 1)
+
+
+barplot(table(temp$GF),col = "red",ylab = "Frecuencia",xlab = "Goles durante la temporada"
+     ,main="Distribución real",ylim=c(0,2700)) #Saca el gráfico de los
+#goles reales
+grid(nx = NA, ny = NULL,lty = 1, col = "gray", lwd = 1)
+
+
+#Comparando las gráficas se puede ver que son realmente parecidas.
+```
+
+```{r CHUNK 6 LOCAL}
+#Para los partidos que se juegan en casa, solo toma las observaciones que se 
+#tienen como local
+tempL=rbind(datos %>% select(Season, Equipo=home, opp=visitor, GF=hgoal, 
+                             GC=vgoal))
+tempL=tempL %>% mutate(dG=GF-GC) 
+
+#En este caso selecciona solamente los partidos que cada equipo juega como local.
+
+LOCAL1=tempL %>%
+  group_by(Equipo) %>% 
+     summarize(PJ=n(), 
+     GF=sum(GF),
+     GC=sum(GC),
+     DG=sum(dG), 
+     PG=sum(dG>0),
+     PE=sum(dG==0), 
+     PP=sum(dG<0),
+) %>% 
+  mutate(Puntos = (PG*3) + PE) %>%
+  mutate(GMC=GF/PJ) %>% 
+  mutate(GRC=GC/PJ)
+
+
+GMC=colMeans(LOCAL1[-1])[9] 
+GRC=colMeans(LOCAL1[-1])[10]
+
+```
+
+```{r CHUNK 7}
+lambdaL=mean(tempL$GF) #Calcula la lambda de la ditrib. de Poisson calculando
+#la media de los goles a favor
+
+fptempL=rpois(length(tempL$GF),lambda=lambdaL) #Calcula 380 valores aleatroios de la
+#distribución de Poisson con la lambda calculada
+
+par(mfrow = c(1,2))
+
+barplot(table(fptempL),col = "blue",ylab = "Frecuencia",xlab = "Goles en casa",
+     main="Distribución teórica",ylim=c(0,1250)) # Saca el gráfico de los goles
+#esperados
+grid(nx = NA, ny = NULL,lty = 1, col = "gray", lwd = 1)
+
+barplot(table(tempL$GF),col = "red",ylab = "Frecuencia",xlab = "Goles en casa",
+     main = "Distribución real",ylim=c(0,1250))#Saca el gráfico de los goles
+#reales
+grid(nx = NA, ny = NULL,lty = 1, col = "gray", lwd = 1)
+```
+
+```{r CHUNK 8 VISITANTE}
+#Para los partidos que se juegan fuera, solo toma las observaciones como 
+#visitante
+
+#En este chunk hace lo mismo que en el anterior pero para las observaciones en 
+#las que el equipo es visitante.
+
+tempV=rbind(datos %>% select(Season, Equipo=visitor, opp=home, GF=vgoal,
+                             GC=hgoal))
+tempV=tempV %>% mutate(dG=GF-GC)
+
+VISITANTE1=tempV %>% 
+     group_by(Equipo) %>% 
+     summarize(PJ=n(), 
+     GF=sum(GF),
+     GC=sum(GC),
+     DG=sum(dG), 
+     PG=sum(dG>0),
+     PE=sum(dG==0), 
+     PP=sum(dG<0),
+ ) %>% 
+  mutate(Puntos = (PG*3) + PE) %>%
+  mutate(GMF=GF/PJ) %>% 
+  mutate(GRF=GC/PJ)
+
+
+
+GMF=colMeans(VISITANTE1[-1])[9]
+GRF=colMeans(VISITANTE1[-1])[10]
+```
+
+```{r CHUNK 9}
+lambdaV=mean(tempV$GF) #Hacer el histograma y compararlo con el histograma de
+#debajo
+fptempV=rpois(length(tempV$GF),lambda=lambdaV)
+
+par(mfrow = c(1,2))
+
+barplot(table(fptempV),col = "blue",ylab = "Frecuencia",
+        xlab = "Goles fuera de casa",main="Distribución teórica",ylim=c(0,1250))
+grid(nx = NA, ny = NULL,lty = 1, col = "gray", lwd = 1)
+
+barplot(table(tempV$GF), col ="red", ylab = "Frecuencia",
+        xlab = "Goles fuera de casa",main = "Distribución real",ylim=c(0,1250))
+grid(nx = NA, ny = NULL,lty = 1, col = "gray", lwd = 1)
+
+#En los tres pares de gráficos que hemos visto podemos apreciar
+```
+
+```{r CHUNK 10}
+#Para realizar el contraste y ver si se puede considerar Poisson.
+a=rep(0,max(temp$GF))
+for (i in (1:max(temp$GF+1))) {
+  a[i]=sum(temp$GF==i-1)
+  i=i+1
+}
+a
+```
+
+```{r CHUNK 11}
+lambdaT=mean(temp$GF)
+frec_esperada=dpois(0:max(temp$GF),lambdaT)
+frecuencia_esperada=frec_esperada*length(temp$GF)
+frecuencia_esperada
+```
+
+```{r CHUNK 12}
+w=rbind(frecuencia_esperada,a)
+w
+
+chisq.test(w,simulate.p.value = TRUE)
+# El maximo que se puede calcular es temp - 9, sino deja de seguir una
+# distribucion Poisson
+```
+
+```{r CHUNK 13 TEMPORADA}
+#Para hacer la clasificación
+
+temp1=temp %>% 
+     group_by(Equipo) %>% 
+     summarize(PJ=n(), 
+     GF=sum(GF), #Goles a Favor
+     GC=sum(GC), #Goles en Contra
+     DG=sum(dG), #Diferencia de goles
+     PG=sum(dG>0), #Partidos ganados
+     PE=sum(dG==0), #Partidos empatados
+     PP=sum(dG<0), #Partidos perdidos 
+  ) %>% 
+  mutate(Puntos = (PG*3) + PE) %>%
+  mutate(GM=GF/PJ) %>% 
+  mutate(GR=GC/PJ)
+```
+
+```{r CHUNK 14}
+dimT=dim(temp1)
+dimT
+equip=rep(0,dimT[1])
+for (t in 1:dimT[1]){
+  equip[t]=temp1$Equipo[t]
+}
+equipos=sort(equip,decreasing=FALSE)
+equipos
+```
+
+```{r CHUNK 15 Calculos PRElandas}
+#Calcular los valores que despues nos calcularan las landas.
+
+CAC=rep(0,dimT[1]) #Capacidad Atacante en Casa
+CDC=rep(0,dimT[1]) #Capacidad Defensiva en Casa
+CAF=rep(0,dimT[1]) #Capacidad Atacante Fuera
+CDF=rep(0,dimT[1]) #Capacidad Defensiva Fuera
+gmf=rep(0,dimT[1]) #Media de goles fuera
+gmc=rep(0,dimT[1]) #Media de goles en casa
+
+
+for (k in 1:dimT[1]){
+  CAC[k]=LOCAL1$GMC[k]/GMC 
+  CDC[k]=LOCAL1$GRC[k]/GRC
+  CAF[k]=VISITANTE1$GMF[k]/GMF
+  CDF[k]=VISITANTE1$GRF[k]/GRF
+}
+
+PRElandas=data.frame(equipos=temp1$Equipo,CAC,CDC,CAF,CDF)
+```
+
+```{r CHUNK 16}
+equipos_estudio=sort(unique(temp[temp$Season==tmp,]$Equipo),decreasing=FALSE)
+equipos_estudio
+```
+
+```{r CHUNK 17}
+PRElandasF=PRElandas[PRElandas$equipos %in% equipos_estudio,]
+dim(PRElandasF)
+rownames(PRElandasF)=1:20
+```
+
+```{r CHUNK 18}
+landaL <- function(l,v) {
+  
+  landaL = PRElandasF[PRElandasF$equipos == l,2]*
+    PRElandasF[PRElandasF$equipos == v,5]*GMC
+  
+  return(landaL)
+}
+```
+
+```{r CHUNK 19}
+landaV <- function(v,l) {
+  
+  landaV = PRElandasF[PRElandasF$equipos== v,4]*
+    PRElandasF[PRElandasF$equipos == l,3]*GMF
+  
+  return(landaV)
+}
+```
+
+```{r CHUNK 20}
+n_equipos=20
+landasL=matrix(1,nrow=n_equipos,ncol=n_equipos)
+landasV=matrix(1,nrow=n_equipos,ncol=n_equipos)
+
+colnames(landasL)=equipos_estudio
+rownames(landasL)=equipos_estudio
+colnames(landasV)=equipos_estudio
+rownames(landasV)=equipos_estudio
+```
+
+```{r CHUNK 21}
+for (j in 1:n_equipos){
+  for (i in 1:n_equipos){
+    if (i==j) {
+      landasL[i,j]=0
+      landasV[i,j]=0
+    } else {
+      landasL[i,j]=landaL(equipos_estudio[i],equipos_estudio[j]) 
+      #Cuando la fila es local y la columna visitante.
+      landasV[i,j]=landaV(equipos_estudio[i],equipos_estudio[j]) 
+      #Cuando la fila es visitante y la columna local.
+      
+    }                                          
+  }
+}
+```
+
+```{r CHUNK 22}
+match <- function(r1,r2){
+  
+  gL=rpois(1,r1)
+  gV=rpois(1,r2)
+  
+  result=c(gL,gV)
+  
+  return(result)
+}
+```
+
+```{r CHUNK 23}
+tabla_puntos=matrix(0,20,1000)
+tabla_GF=matrix(0,20,1000)
+tabla_GC=matrix(0,20,1000)
+tabla_PG=matrix(0,20,1000)
+tabla_PE=matrix(0,20,1000)
+tabla_PP=matrix(0,20,1000)
+tabla_posiciones=matrix(0,20,1000)
+rownames(tabla_puntos)=equipos_estudio
+rownames(tabla_GF)=equipos_estudio
+rownames(tabla_GC)=equipos_estudio
+rownames(tabla_PG)=equipos_estudio
+rownames(tabla_PE)=equipos_estudio
+rownames(tabla_PP)=equipos_estudio
+rownames(tabla_posiciones)=paste("Posición",1:20)
+```
+
+```{r CHUNK 24}
+dimensiones=c(20,20,2)
+resultado2=
+array(0,dim=dimensiones)
+rownames(resultado2)=equipos_estudio
+colnames(resultado2)=equipos_estudio
+parti=c(0,0)
+replicaciones = 1000
+
+for (k in 1:replicaciones){
+  for (i in 1:20){
+    for( j in 1:20){
+      if (i==j){
+        resultado2[i,j,1]=NA
+        resultado2[i,j,2]=NA
+      } else {
+        parti=match(landasL[i,j],landasV[j,i])
+        resultado2[i,j,1]=parti[1] #A FAVOR. El local es la fila, columna 
+        #visitante.
+        resultado2[i,j,2]=parti[2] #EN CONTRA. El local es la fila, columna 
+        #visitante.
+      }
+    }
+    }
+  gol_C=0
+  gol_F=0
+  part_empata2=0
+  part_gana2=0
+  part_perdi2=0
+  puntos=0
+
+  resultado2[0:5,0:5,1]
+  resultado2[0:5,0:5,2]
+  
+  diag(resultado2[,,1])=NA
+  diag(resultado2[,,2])=NA
+  dif = resultado2[,,1]-resultado2[,,2]
+  
+  
+  colnames(dif)=equipos_estudio
+  rownames(dif)=equipos_estudio
+  dift=t(dif)
+  gol_F=0
+  gol_F=rowSums(resultado2[,,1], na.rm = TRUE) + rowSums(t(resultado2[,,2]), 
+                                                            na.rm = TRUE)
+  gol_F
+  
+  gol_C=rowSums(resultado2[,,2], na.rm = TRUE) + rowSums(t(resultado2[,,1]), 
+                                                         na.rm = TRUE)
+  gol_C
+  
+  part_gana2=rowSums((dif>0)+(dift<0), na.rm=TRUE)
+  part_empata2=rowSums((dif==0)+(dift==0), na.rm=TRUE)
+  part_perdi2=38-part_gana2-part_empata2
+  
+  puntos = rowSums((dif>0)*3 + (dif==0)*1 + (dift<0)*3 + (dift==0)*1,
+                   na.rm = TRUE)
+  
+  temporada=data.frame(puntos,GF=gol_F,GC=gol_C,PG=part_gana2,PE=part_empata2,
+                       PP=part_perdi2)
+  
+  tabla_puntos[,k]=temporada[,1]
+  tabla_GF[,k]=temporada[,2]
+  tabla_GC[,k]=temporada[,3]
+  tabla_PG[,k]=temporada[,4]
+  tabla_PE[,k]=temporada[,5]
+  tabla_PP[,k]=temporada[,6]
+  tabla_posiciones[,k]=order(-temporada$puntos)
+  
+  k=k+1
+}
+
+
+frecuencias = apply(tabla_posiciones, 1, table)
+
+```
+
+```{r}
+resultados_df <- data.frame(
+  Puntos = rowMeans(tabla_puntos), 
+  G = rowMeans(tabla_PG),
+  E = rowMeans(tabla_PE),
+  P = rowMeans(tabla_PP),
+  GF = rowMeans(tabla_GF),
+  GC = rowMeans(tabla_GC)
+)
+```
+
+```{r CHUNK 25}
+tabla_frecuencias=as.data.frame(bind_rows(frecuencias))
+tabla_frecuencias[is.na(tabla_frecuencias)]<-0
+nom_col=as.integer(colnames(tabla_frecuencias))
+for (e in 1:20){
+  a=as.integer(nom_col[e])
+  nom_columna=equipos_estudio[a]
+  colnames(tabla_frecuencias)[e]=nom_columna
+}
+posiciones=paste("Posición",c(1:20))
+rownames(tabla_frecuencias)=posiciones
+
+```
+
+```{r CHUNK 26}
+probabilidades=100*(tabla_frecuencias/replicaciones)[,seq(2,40,2)]
+colnames(probabilidades)=colnames(tabla_frecuencias)
+rownames(probabilidades)=rownames(tabla_frecuencias)
+```
+
+```{r CHUNK 27 AQUI CAMBIA EL PROBLEMA}
+dia_estudio = as.Date("2024/01/22")
+temp_actual = data[(data$Season == 2023 & data$Date<dia_estudio),]
+temp_pred = data[(data$Season == 2023 & data$Date>dia_estudio),]
+```
+
+```{r CHUNK 28}
+actual=rbind(
+   temp_actual %>% select(Season, Equipo=home, opp=visitor, GF=hgoal, GC=vgoal),
+   temp_actual %>% select(Season, Equipo=visitor, opp=home, GF=vgoal, GC=hgoal)
+     )
+
+ actual$GF=as.numeric(actual$GF)
+ actual$GC=as.numeric(actual$GC)
+ actual=actual %>% mutate(dG=GF-GC)
+```
+
+```{r CHUNK 29}
+ actualL=rbind(temp_actual %>% select(Season, Equipo=home, opp=visitor, 
+                                      GF=hgoal,GC=vgoal))
+ actualL=actualL %>% mutate(dG=GF-GC) 
+ 
+ actualLOCAL1=actualL %>%
+   group_by(Equipo) %>% 
+      summarize(PJ=n(), 
+      GF=sum(GF),
+      GC=sum(GC),
+      DG=sum(dG), 
+      PG=sum(dG>0),
+      PE=sum(dG==0), 
+      PP=sum(dG<0),
+ ) %>% 
+   mutate(Puntos = (PG*3) + PE) %>%
+   mutate(GMC=GF/PJ) %>% 
+   mutate(GRC=GC/PJ)
+
+```
+
+```{r CHUNK 30}
+ actualV=rbind(temp_actual %>% select(Season, Equipo=visitor, opp=home, 
+                                      GF=vgoal,GC=hgoal))
+ actualV=actualV %>% mutate(dG=GF-GC)
+ 
+ actualVISITANTE1=actualV %>% 
+      group_by(Equipo) %>% 
+      summarize(PJ=n(), 
+      GF=sum(GF),
+      GC=sum(GC),
+      DG=sum(dG), 
+      PG=sum(dG>0),
+      PE=sum(dG==0), 
+      PP=sum(dG<0),
+  ) %>% 
+   mutate(Puntos = (PG*3) + PE) %>%
+   mutate(GMF=GF/PJ) %>% 
+   mutate(GRF=GC/PJ)
+
+```
+
+```{r CHUNK 31}
+actual1=actual %>% 
+     group_by(Equipo) %>% 
+     summarize(PJ=n(), 
+     GF=sum(GF), #Goles a Favor
+     GC=sum(GC), #Goles en Contra
+     DG=sum(dG), #Diferencia de goles
+     PG=sum(dG>0), #Partidos ganados
+     PE=sum(dG==0), #Partidos empatados
+     PP=sum(dG<0), #Partidos perdidos 
+  ) %>% 
+  mutate(Puntos = (PG*3) + PE) %>%
+  mutate(GM=GF/PJ) %>% 
+  mutate(GR=GC/PJ)
+```
+
+```{r CHUNK 32}
+dimT_actual=dim(actual1)
+equip_actual=rep(0,dimT_actual[1])
+for (t in 1:dimT_actual[1]){
+  equip_actual[t]=actual1$Equipo[t]
+}
+equipos_actual=sort(equip_actual,decreasing=FALSE)
+equipos_actual
+```
+
+```{r}
+GMC=colMeans(actualLOCAL1[-1])[9] 
+GRC=colMeans(actualLOCAL1[-1])[10]
+
+GMF=colMeans(actualVISITANTE1[-1])[9]
+GRF=colMeans(actualVISITANTE1[-1])[10]
+```
+
+```{r CHUNK 33}
+CAC_actual=rep(0,dimT_actual[1]) 
+CDC_actual=rep(0,dimT_actual[1]) 
+CAF_actual=rep(0,dimT_actual[1]) 
+CDF_actual=rep(0,dimT_actual[1]) 
+gmf_actual=rep(0,dimT_actual[1]) 
+gmc_actual=rep(0,dimT_actual[1]) 
+
+CAC_actual = actualLOCAL1[,10]/GMC
+CDC_actual = actualLOCAL1[,11]/GRC
+CAF_actual =actualVISITANTE1[,10]/GMF
+CDF_actual =actualVISITANTE1[,11]/GRF
+
+
+PRElandas_actual1=data.frame(equipos=equipos_actual,CAC=CAC_actual,
+                             CDC=CDC_actual,CAF=CAF_actual,CDF=CDF_actual)
+colnames(PRElandas_actual1)=colnames(PRElandas)
+```
+
+```{r}
+PRElandas_anterior=PRElandas[PRElandas$equipos %in% equipos_actual,]
+rownames(PRElandas_anterior)=1:20
+```
+
+```{r}
+peso_actual = 0.4
+peso_anterior = 1 - peso_actual
+calculos_landas_pond=peso_actual*PRElandas_actual1[,-1]+
+  peso_anterior*PRElandas_anterior[,-1]
+PRElandas_actual=cbind(equipos_actual,calculos_landas_pond)
+```
+
+```{r ECHARLE UN OJO A ESTO Y VER CÓMO HACEMOS ESTO}
+#Sería repetir el problema otra vez:
+landasL_actuales=matrix(0,nrow=n_equipos,ncol=n_equipos)
+landasV_actuales=matrix(0,nrow=n_equipos,ncol=n_equipos)
+
+colnames(landasL_actuales)=equipos_actual
+rownames(landasL_actuales)=equipos_actual
+colnames(landasV_actuales)=equipos_actual
+rownames(landasV_actuales)=equipos_actual
+```
+
+```{r}
+for (j in 1:n_equipos){
+  for (i in 1:n_equipos){
+    if (i==j) {
+      landasL_actuales[i,j]=0
+      landasV_actuales[i,j]=0
+    } else {
+      landasL_actuales[i,j]=landaL(equipos_estudio[i],equipos_estudio[j]) 
+      #Cuando la fila es local y la columna visitante.
+      landasV_actuales[i,j]=landaV(equipos_estudio[i],equipos_estudio[j]) 
+      #Cuando la fila es visitante y la columna local.
+    }                                          
+  }
+}
+```
+
+```{r}
+#PARA RELLENAR EL DATA FRAME:
+PRElandas_actual=PRElandasF
+for (k in 1:dim(temp_pred)[1]) {
+  temp_pred$hgoal[k] = match(landasL_actuales[
+    temp_pred$home[k],temp_pred$visitor[k]],
+                landasV_actuales[temp_pred$visitor[k],temp_pred$home[k]])[1]
+  temp_pred$vgoal[k] = match(landasL_actuales[
+    temp_pred$home[k],temp_pred$visitor[k]],
+                landasV_actuales[temp_pred$visitor[k],temp_pred$home[k]])[2]
+  temp_pred$FT[k] = paste(temp_pred$hgoal[k],'-',temp_pred$vgoal[k])
+}
+```
+
+```{r}
+actual_pred=rbind(
+   temp_pred %>% select(Season, Equipo=home, opp=visitor, GF=hgoal, GC=vgoal),
+   temp_pred %>% select(Season, Equipo=visitor, opp=home, GF=vgoal, GC=hgoal)
+     )
+
+ actual_pred$GF=as.numeric(actual_pred$GF)
+ actual_pred$GC=as.numeric(actual_pred$GC)
+ actual_pred=actual_pred %>% mutate(dG=GF-GC)
+```
+
+```{r}
+a3=rep(0,max(actual_pred$GF))
+for (i in (1:max(actual_pred$GF+1))) {
+  a3[i]=sum(actual_pred$GF==i-1)
+  i=i+1
+}
+a3
+
+lambdaTP=mean(actual_pred$GF)
+frec_esperada2=dpois(0:max(actual_pred$GF),lambdaTP)
+frecuencia_esperada2=frec_esperada2*length(actual_pred$GF)
+frecuencia_esperada2
+
+w2=rbind(frecuencia_esperada2,a3)
+w2
+
+chisq.test(w2,simulate.p.value = TRUE)
+```
+
+```{r}
+actual1_pred=actual_pred %>% 
+     group_by(Equipo) %>% 
+     summarize(PJ=n(), 
+     GF=sum(GF), #Goles a Favor
+     GC=sum(GC), #Goles en Contra
+     DG=sum(dG), #Diferencia de goles
+     PG=sum(dG>0), #Partidos ganados
+     PE=sum(dG==0), #Partidos empatados
+     PP=sum(dG<0), #Partidos perdidos 
+  ) %>% 
+  mutate(Puntos = (PG*3) + PE) %>%
+  mutate(GM=GF/PJ) %>% 
+  mutate(GR=GC/PJ)
+```
+
+
+
+
+
+
+
