@@ -38,7 +38,7 @@ El modelo analiza datos históricos de partidos de la Liga Española para:
 - `src/`: Scripts organizados por funcionalidad
 - `data/`: Archivos de datos incluyendo `ultimas2temporadas.xlsx`
 - `liga_espanola_analisis.Rmd`: Documento R Markdown con análisis completo
-- 'TFG Pablo Legerén.pdf': Documento final .pdf donde están los resultados del estudio
+- `TFG Pablo Legerén.pdf`: Documento final .pdf donde están los resultados del estudio
 
 ## Uso
 
