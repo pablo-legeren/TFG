@@ -1,5 +1,3 @@
-# TFG
-
 # Modelo de probabilidad para el análisis de resultados de Liga Española
 
 Este proyecto implementa un modelo probabilístico basado en la distribución de Poisson para analizar y predecir resultados de la Liga Española de fútbol.
