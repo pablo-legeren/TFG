@@ -4,6 +4,9 @@ Este proyecto implementa un modelo probabilístico basado en la distribución de
 
 Con una precisión de **más del 85%** se logra obtener la clasificación final de una temporada así como otras estadísticas (goles a favor, goles en contra, puntos) en base al rendimiento en temporadas pasadas.
 
+> **Nota:** La versión original de este proyecto está implementada en **R**. Actualmente se está desarrollando una versión equivalente en **Python**, que se encuentra en fase de revisión y validación.
+
+
 ## Descripción
 
 El modelo analiza datos históricos de partidos de la Liga Española para:
@@ -37,6 +40,7 @@ El modelo analiza datos históricos de partidos de la Liga Española para:
 - `data/`: Archivos de datos incluyendo `ultimas2temporadas.xlsx`
 - `liga_espanola_analisis.Rmd`: Documento R Markdown con análisis completo
 - `TFG Pablo Legerén.pdf`: Documento final .pdf donde están los resultados del estudio
+- `python/`: Carpeta en desarrollo con la traducción a Python del modelo
 
 ## Uso
 
